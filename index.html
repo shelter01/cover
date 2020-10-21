@@ -39,7 +39,7 @@
             padding: 1vw 0 0 1.57vw;
         }
 
-        .cover .cover-chart {
+        .cover .cover-charts {
             width: 100%;
             height: 100%;
         }
@@ -70,9 +70,9 @@
         var cover = document.getElementsByClassName('cover')[0];
         var text = document.createElement('div');
         text.setAttribute('class', 'cover-text');
-        var chart = document.createElement('div');
-        chart.setAttribute('id', 'chart');
-        chart.setAttribute('class', 'cover-chart');
+        var charts = document.createElement('div');
+        charts.setAttribute('id', 'charts');
+        charts.setAttribute('class', 'cover-charts');
 
         var key = ['分辨率 ', '帧率 ', '量化 ', '色域 ', '动态范围 ', '音频采样频率 ', '编码码率 ', '流畅度'];
         var value = ['3840*2160', '（扫描模式） 50HZ（逐行）', '10bit', 'BT.2020', 'HLG/100nit （GY/T 315-2018）', '42kHz', '（文件封装）', ''];
@@ -86,12 +86,88 @@
         }
 
         cover.appendChild(text);
-        cover.appendChild(chart);
+        cover.appendChild(charts);
 
         // 数据项
         var dataX = [];
-        var dataY = [[], [], []];
-        var url = 'http://a.1029.lcps.aodianyun.com/getStatus'
+        var dataY = [];
+        var seriesConfig = [
+            {
+                name: '信源1',
+                data: [],
+                color: '#FE3A3B',
+                marker: { // 线上数据点
+                    radius: 0,
+                    lineWidth: 0
+                }
+            },
+            {
+                name: '信源2',
+                data: [],
+                color: '#107EF2',
+                marker: {
+                    radius: 0,
+                    lineWidth: 0
+                }
+            },
+            {
+                name: '信源3',
+                data: [],
+                color: '#1AC81A',
+                marker: {
+                    radius: 0,
+                    lineWidth: 0
+                }
+            }
+        ]
+        // res中截取数据
+        var len = 0;
+        var series = [];
+        var resdata = [];
+        var time = 60000;
+
+        // var url = '//a.1029.lcps.aodianyun.com/getStatus';
+        var url = location.protocol === 'https:'
+            ? 'https://127.0.0.1.lcps.aodianyun.com/getStatus'
+            : 'http://127.0.0.1.lcps.aodianyun.com/getStatus';
+
+        // 初始化获取数组长度
+        function init() {
+            $.ajax({
+                type: 'POST',
+                url: url,
+                data: JSON.stringify({}),
+                dataType: 'json',
+                success: function (res) {
+                    // 最多显示三组数据
+                    resdata = res.sourceStatistics_5s.length < 3
+                        ? res.sourceStatistics_5s
+                        : res.sourceStatistics_5s.slice(0, 3);
+                    len = resdata.length;
+                    // 初始化x轴两点数据
+                    dataX.push(getNowFormatDate());
+                    dataX.push(dataX[0]);
+                    // 初始化y轴和series两点数据
+                    for (var i = 0; i < len; i++) {
+                        dataY.push([]);
+                        dataY[i].push((1 - resdata[i].empty / resdata[i].sum) * 100);
+                        dataY[i].push((1 - resdata[i].empty / resdata[i].sum) * 100);
+                        series.push(seriesConfig[i]);
+                        series[i].data = dataY[i];
+                    }
+
+                    upDateSeries();
+
+                    // 每分钟更新数据
+                    setInterval(function () {
+                        getData();
+                    }, time)
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    console.log(jqXHR.status, textStatus, errorThrown);
+                }
+            });
+        }
 
         // 获取最新数据
         function getData() {
@@ -101,44 +177,25 @@
                 data: JSON.stringify({}),
                 dataType: 'json',
                 success: function (res) {
+                    resdata = res.sourceStatistics_5s.length < 3
+                        ? res.sourceStatistics_5s
+                        : res.sourceStatistics_5s.slice(0, 3);
                     dataX.push(getNowFormatDate());
-                    // 测试数据
-                    // dataY[0].push(1 - res.sourceStatistics_5s[0].empty / res.sourceStatistics_5s[0].sum+Math.random());
-                    // dataY[1].push(1 - res.sourceStatistics_5s[1].empty / res.sourceStatistics_5s[1].sum+Math.random());
-                    // dataY[2].push(1 - res.sourceStatistics_5s[1].empty / res.sourceStatistics_5s[1].sum+Math.random());
-                    // 实际数据
-                    dataY[0].push(1 - res.sourceStatistics_5s[0].empty / res.sourceStatistics_5s[0].sum);
-                    dataY[1].push(1 - res.sourceStatistics_5s[1].empty / res.sourceStatistics_5s[1].sum);
-                    dataY[2].push(1 - res.sourceStatistics_5s[2].empty / res.sourceStatistics_5s[2].sum);
-                    if (dataX.length < 2) {
-                        dataX.push(dataX[0]);
-                        dataY[0].push(dataY[0][0]);
-                        dataY[1].push(dataY[1][0]);
-                        dataY[2].push(dataY[2][0]);
-                    } else if (dataX.length > 60) {
-                        dataX.shift();
-                        dataY[0].shift();
-                        dataY[1].shift();
-                        dataY[2].shift();
+                    for (var i = 0; i < len; i++) {
+                        dataY[i].push((1 - resdata[i].empty / resdata[i].sum) * 100);
+                        series[i].data = dataY[i];
                     }
-                    chart.update({
-                        series: [{
-                            data: dataY[0]
-                        }, {
-                            data: dataY[1]
-                        }, {
-                            data: dataY[2]
-                        }],
-                        xAxis: {
-                            categories: dataX
-                        }
-                    });
+
+                    upDateSeries();
                 },
-                error: function () { }
+                error: function (jqXHR, textStatus, errorThrown) {
+                    console.log(jqXHR.status, textStatus, errorThrown);
+                }
             });
         }
 
-        function getNowFormatDate() { // 获取当前时间
+        // 获取当前时间
+        function getNowFormatDate() {
             var date = new Date();
             var seperator = ":";
             var h = date.getHours();
@@ -150,8 +207,29 @@
             return h + seperator + m + seperator + s;
         }
 
+        // 更新chart内series数据
+        function upDateSeries() {
+            // 动态更新series数组长度
+            var diff = chart.series.length - series.length;
+            if (diff > 0) {
+                for (var i = chart.series.length; i > diff; i--) {
+                    chart.series[i - 1].remove(true);
+                }
+            } else if (diff < 0) {
+                for (var i = chart.series.length; i < series.length; i++) {
+                    chart.addSeries({});
+                }
+            }
+            chart.update({
+                series: series,
+                xAxis: {
+                    categories: dataX
+                }
+            });
+        }
+
         // chart配置
-        var chart = Highcharts.chart('chart', {
+        var chart = Highcharts.chart('charts', {
             chart: {
                 type: 'area',
                 backgroundColor: 'rgba(0, 0, 0, 0)'
@@ -175,6 +253,7 @@
                     fontFamily: 'SimHei',
                     fontWeight: "100"
                 },
+                itemDistance: 80 //图例项间距
                 // align: "right", // 程度标的目标地位
                 // verticalAlign: "top" //垂直标的目标地位
             },
@@ -243,41 +322,10 @@
                     fillOpacity: 0.2 // 透明度
                 }
             },
-            series: [{
-                name: '信源1',
-                data: dataY[0],
-                color: '#FE3A3B',
-                marker: { // 线上数据点
-                    radius: 0,
-                    lineWidth: 0
-                }
-            },
-            {
-                name: '信源2',
-                data: dataY[1],
-                color: '#107EF2',
-                marker: {
-                    radius: 0,
-                    lineWidth: 0
-                }
-            },
-            {
-                name: '信源3',
-                data: dataY[2],
-                color: '#1AC81A',
-                marker: {
-                    radius: 0,
-                    lineWidth: 0
-                }
-            }]
+            series: []
         });
 
-        getData();
-
-        // 更新数据
-        setInterval(function () {
-            getData();
-        }, 60000)
+        init();
     });
 </script>
 
